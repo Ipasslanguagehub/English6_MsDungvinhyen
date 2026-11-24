@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Museum Maze Chase</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root { --gold:#e8b84a; --wine:#5a1f2b; --bg:#1d1420; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:#fff; font-family:'Fredoka',system-ui,sans-serif; }
+  body { display:flex; flex-direction:column; align-items:center; overflow:hidden; touch-action:none; }
+  #top { width:100%; max-width:1100px; display:flex; align-items:center; gap:14px; padding:10px 14px; }
+  #question { flex:1; display:flex; align-items:center; gap:14px; background:#2c1f30; border:3px solid var(--gold); border-radius:14px; padding:8px 16px; min-height:74px; }
+  #qEmoji { font-size:46px; line-height:1; }
+  #qText { font-size:clamp(17px,2.4vw,26px); font-weight:500; }
+  #qText b { color:var(--gold); letter-spacing:2px; }
+  .hud { text-align:center; font-size:18px; min-width:90px; }
+  .hud .big { font-size:26px; font-weight:700; }
+  button { font-family:inherit; cursor:pointer; }
+  #speak { background:var(--gold); color:#2c1f30; border:none; border-radius:50%; width:48px; height:48px; font-size:22px; flex:none; }
+  #stage { position:relative; flex:1; width:100%; display:flex; justify-content:center; align-items:center; min-height:0; padding:0 10px 10px; }
+  canvas { display:block; border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,.5); max-width:100%; max-height:100%; }
+  .overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(20,10,24,.78); }
+  .card { background:#2c1f30; border:4px solid var(--gold); border-radius:20px; padding:28px 34px; text-align:center; max-width:560px; }
+  .card h1 { margin:0 0 6px; color:var(--gold); font-size:40px; }
+  .card p { font-size:19px; margin:8px 0; }
+  .card .bigbtn { margin-top:16px; background:var(--gold); color:#2c1f30; border:none; border-radius:14px; padding:12px 34px; font-size:24px; font-weight:700; }
+  .hidden { display:none !important; }
+  #flash { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; font-size:clamp(40px,8vw,90px); font-weight:700; text-shadow:0 4px 16px rgba(0,0,0,.8); }
+  #pad { position:absolute; right:22px; bottom:22px; display:grid; grid-template-columns:repeat(3,56px); grid-template-rows:repeat(3,56px); gap:4px; opacity:.85; }
+  #pad button { background:rgba(255,255,255,.15); border:2px solid rgba(255,255,255,.4); color:#fff; border-radius:12px; font-size:24px; }
+  #review { text-align:left; font-size:17px; max-height:200px; overflow:auto; margin-top:8px; }
+  #review div { padding:3px 0; }
+</style>
+</head>
+<body>
+<div id="top">
+  <div class="hud"><div>Lives</div><div class="big" id="lives">❤️❤️❤️</div></div>
+  <div id="question"><span id="qEmoji">🏛️</span><span id="qText">Museum Maze Chase</span></div>
+  <button id="speak" title="Read the question">🔊</button>
+  <div class="hud"><div>Score</div><div class="big" id="score">0</div></div>
+  <div class="hud"><div>Question</div><div class="big" id="qnum">–</div></div>
+</div>
+<div id="stage">
+  <canvas id="game"></canvas>
+  <div id="flash"></div>
+  <div id="pad">
+    <span></span><button data-d="up">▲</button><span></span>
+    <button data-d="left">◀</button><span></span><button data-d="right">▶</button>
+    <span></span><button data-d="down">▼</button><span></span>
+  </div>
+  <div class="overlay" id="startScreen">
+    <div class="card">
+      <h1>🏛️ Museum Maze Chase</h1>
+      <p>Read the sentence. Find the missing word.</p>
+      <p>Run into the <b style="color:var(--gold)">golden frame</b> with the right answer.</p>
+      <p>Don't let the dinosaurs 🦖 catch you!</p>
+      <p style="font-size:16px;opacity:.8">Arrow keys / WASD, swipe, or the buttons ◀ ▲ ▼ ▶</p>
+      <button class="bigbtn" id="startBtn">Start ▶</button>
+    </div>
+  </div>
+  <div class="overlay hidden" id="endScreen">
+    <div class="card">
+      <h1 id="endTitle">Great job!</h1>
+      <p id="endScore"></p>
+      <div id="review"></div>
+      <button class="bigbtn" id="againBtn">Play again ↻</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---------- Questions ----------
+const WORDS = ["dark","scary","amazing","boring","comfortable","exciting"];
+const QUESTIONS = [
+  // dark
+  {e:"🌑", t:"There are no lights in this room. It is very ___.", a:"dark"},
+  {e:"🔦", t:"We need a torch because the cave is ___.", a:"dark"},
+  {e:"🌃", t:"It's 10 p.m. and the sky is black. It's ___ outside.", a:"dark"},
+  {e:"💡", t:"Turn on the light, please! I can't see. It's too ___.", a:"dark"},
+  {e:"🦉", t:"Owls can see well at night when it is ___.", a:"dark"},
+  {e:"🕶️", t:"My new sunglasses make everything look ___.", a:"dark"},
+  // scary
+  {e:"🧟", t:"The mummy has big red eyes. It is ___!", a:"scary"},
+  {e:"😱", t:"The boy screams. The dinosaur skeleton is ___!", a:"scary"},
+  {e:"🕷️", t:"There's a huge spider on the wall. It's ___!", a:"scary"},
+  {e:"👻", t:"I don't like ghost films. They are too ___.", a:"scary"},
+  {e:"🐍", t:"The big snake opens its mouth. It's ___!", a:"scary"},
+  {e:"🦈", t:"Look at the shark's big teeth! They are so ___.", a:"scary"},
+  // amazing
+  {e:"👑", t:"Wow! Look at the beautiful gold crown. It's ___!", a:"amazing"},
+  {e:"🦕", t:"This dinosaur is 30 metres long! It's ___!", a:"amazing"},
+  {e:"🚀", t:"The real rocket in the museum is so big. It's ___!", a:"amazing"},
+  {e:"🤖", t:"Wow! The robot can talk and dance. It's ___!", a:"amazing"},
+  {e:"💎", t:"The diamond is bigger than my hand! It's ___!", a:"amazing"},
+  {e:"🎨", t:"Her painting looks like a real photo. It's ___!", a:"amazing"},
+  // boring
+  {e:"🥱", t:"The tour is very long and the girl yawns. It's ___.", a:"boring"},
+  {e:"😴", t:"Nothing happens in this film. It's so ___.", a:"boring"},
+  {e:"📺", t:"There is nothing good on TV today. It's ___.", a:"boring"},
+  {e:"⏳", t:"We wait for one hour and do nothing. It's ___.", a:"boring"},
+  {e:"📄", t:"The talk is long, with no pictures and no games. It's ___.", a:"boring"},
+  {e:"🙄", t:"I play the same game every day. Now it's ___.", a:"boring"},
+  // comfortable
+  {e:"🛋️", t:"The sofa in the museum café is soft. It's ___.", a:"comfortable"},
+  {e:"👟", t:"My new trainers feel great. They're very ___.", a:"comfortable"},
+  {e:"🛏️", t:"I sleep well in this big, soft bed. It's ___.", a:"comfortable"},
+  {e:"🧸", t:"My teddy bear is warm and soft. It's ___.", a:"comfortable"},
+  {e:"🧦", t:"These warm socks feel nice on my feet. They're ___.", a:"comfortable"},
+  {e:"🚌", t:"The new bus has big, soft seats. It's ___.", a:"comfortable"},
+  // exciting
+  {e:"🎢", t:"The roller coaster is fast and fun. It's ___!", a:"exciting"},
+  {e:"🎉", t:"We are going to the museum tomorrow! It's ___!", a:"exciting"},
+  {e:"⚽", t:"Our team scores in the last minute! The match is ___!", a:"exciting"},
+  {e:"✈️", t:"We're flying to Da Nang for our holiday! It's ___!", a:"exciting"},
+  {e:"🏁", t:"The car race is very fast. It's ___!", a:"exciting"},
+  {e:"🎁", t:"It's my birthday party today! It's ___!", a:"exciting"},
+];
+// words that could also fit a sentence are never shown together as answers
+const AVOID = {dark:"scary", scary:"dark", amazing:"exciting", exciting:"amazing"};
+const PER_WORD = 2; // sentences per word in one game (6 words × 2 = 12 questions)
+
+// ---------- Map ----------
+// # wall, . path, A-D answer frames, P player start
+const MAP = [
+  "#####################",
+  "#....................",
+  "#.AAA.###.#.###.BBB.#",
+  "#.AAA.....#.....BBB.#",
+  "#.###.#.#####.#.###.#",
+  "#.....#...P...#.....#",
+  "#...#.....#.....#...#",
+  "#.###.#.#####.#.###.#",
+  "#.....#.......#.....#",
+  "#.CCC.###.#.###.DDD.#",
+  "#.CCC.....#.....DDD.#",
+  "....................#",
+  "#####################",
+];
+const COLS = MAP[0].length, ROWS = MAP.length, T = 52;
+const ZONES = ["A","B","C","D"];
+const ENEMY_STARTS = [{x:1,y:1},{x:19,y:11}];
+// Tunnel: go out at the top-right corner -> come in at the bottom-left corner (and back)
+const TUN_A = {x:COLS-1,y:1}, TUN_B = {x:0,y:ROWS-2};
+function step(x,y,d){
+  if(x===TUN_A.x && y===TUN_A.y && d.dx===1)  return {x:TUN_B.x,y:TUN_B.y,portal:true};
+  if(x===TUN_B.x && y===TUN_B.y && d.dx===-1) return {x:TUN_A.x,y:TUN_A.y,portal:true};
+  return {x:x+d.dx,y:y+d.dy,portal:false};
+}
+let START = {x:10,y:5};
+MAP.forEach((r,y)=>{ const i=r.indexOf("P"); if(i>=0) START={x:i,y}; });
+const cell = (x,y) => (y<0||y>=ROWS||x<0||x>=COLS) ? "#" : MAP[y][x];
+const playerOK = (x,y) => cell(x,y) !== "#";
+const enemyOK  = (x,y) => { const c=cell(x,y); return c==="." || c==="P"; };
+const zoneRect = {};
+ZONES.forEach(z=>{ let x0=99,y0=99,x1=-1,y1=-1;
+  MAP.forEach((r,y)=>[...r].forEach((c,x)=>{ if(c===z){x0=Math.min(x0,x);y0=Math.min(y0,y);x1=Math.max(x1,x);y1=Math.max(y1,y);} }));
+  zoneRect[z]={x0,y0,x1,y1}; });
+
+// ---------- Canvas ----------
+const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+cv.width = COLS*T; cv.height = ROWS*T;
+function fit(){
+  const st=document.getElementById("stage");
+  const w=st.clientWidth-20, h=st.clientHeight-10;
+  const s=Math.min(w/cv.width, h/cv.height);
+  cv.style.width=(cv.width*s)+"px"; cv.style.height=(cv.height*s)+"px";
+}
+addEventListener("resize", fit);
+
+// ---------- State ----------
+const DIRS = {up:{dx:0,dy:-1},down:{dx:0,dy:1},left:{dx:-1,dy:0},right:{dx:1,dy:0}};
+let state="start", order=[], qi=0, score=0, lives=3, options={}, results=[], pauseUntil=0, nextAction=null;
+let player, enemies, lastT=0;
+
+function makeEntity(p,speed){ return {tx:p.x,ty:p.y,nx:p.x,ny:p.y,mdx:0,mdy:0,portal:false,prog:1,dir:null,want:null,speed}; }
+function setMove(e,d){ const n=step(e.tx,e.ty,d); e.nx=n.x; e.ny=n.y; e.mdx=d.dx; e.mdy=d.dy; e.portal=n.portal; }
+function resetPositions(){
+  player = makeEntity(START, 3.2);
+  const es = 1.6; // dinosaurs keep the same speed the whole game
+  enemies = ENEMY_STARTS.map(p=>makeEntity(p, es));
+}
+function shuffle(a){ for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
+
+function startGame(){
+  try{ window.focus(); }catch(e){}
+  order = shuffle(WORDS.flatMap(w=>shuffle(QUESTIONS.filter(q=>q.a===w)).slice(0,PER_WORD))); qi=0; score=0; lives=3; results=[];
+  document.getElementById("startScreen").classList.add("hidden");
+  document.getElementById("endScreen").classList.add("hidden");
+  loadQuestion();
+}
+function loadQuestion(){
+  const q = order[qi];
+  const wrong = shuffle(WORDS.filter(w=>w!==q.a && w!==AVOID[q.a])).slice(0,3);
+  const opts = shuffle([q.a, ...wrong]);
+  ZONES.forEach((z,i)=>options[z]=opts[i]);
+  document.getElementById("qEmoji").textContent=q.e;
+  document.getElementById("qText").innerHTML=q.t.replace("___","<b>_____</b>");
+  updateHud(); resetPositions();
+  state="pause"; pauseUntil=performance.now()+1200; nextAction=()=>{state="play";};
+  speak();
+}
+function updateHud(){
+  document.getElementById("lives").textContent = lives>0 ? "❤️".repeat(lives) : "💔";
+  document.getElementById("score").textContent = score;
+  document.getElementById("qnum").textContent = Math.min(qi+1,order.length)+"/"+order.length;
+}
+function flash(txt,color,ms=900){
+  const f=document.getElementById("flash"); f.textContent=txt; f.style.color=color;
+  clearTimeout(flash.t); flash.t=setTimeout(()=>f.textContent="",ms);
+}
+
+function answer(z){
+  const q=order[qi], chosen=options[z];
+  if(chosen===q.a){
+    score++; results.push({q,ok:true}); flash("✔ "+q.a+"!","#7CFC8A"); sfx(true);
+    pauseThen(900, nextQuestion);
+  } else {
+    lives--; results.push({q,ok:false,chosen}); flash("✘ Not "+chosen,"#ff6b6b"); sfx(false);
+    updateHud();
+    if(lives<=0) return pauseThen(1100,endGame);
+    pauseThen(1000, ()=>{resetPositions(); state="play";});
+  }
+}
+function caught(){
+  lives--; flash("🦖 Caught!","#ffb347"); sfx(false); updateHud();
+  if(lives<=0) return pauseThen(1100,endGame);
+  pauseThen(1100, ()=>{resetPositions(); state="play";});
+}
+function pauseThen(ms,fn){ state="pause"; pauseUntil=performance.now()+ms; nextAction=fn; }
+function nextQuestion(){ qi++; if(qi>=order.length) endGame(); else loadQuestion(); }
+function endGame(){
+  state="over"; updateHud();
+  const total=order.length;
+  document.getElementById("endTitle").textContent = lives>0 ? "🏆 Well done!" : "🦖 Game over!";
+  document.getElementById("endScore").textContent = `You got ${score} correct answer${score===1?"":"s"} out of ${total}.`;
+  const rev=document.getElementById("review"); rev.innerHTML="";
+  const seen=new Set();
+  results.filter(r=>!r.ok).forEach(r=>{ if(seen.has(r.q.t))return; seen.add(r.q.t);
+    const d=document.createElement("div"); d.innerHTML=`${r.q.e} ${r.q.t.replace("___","<b style='color:#e8b84a'>"+r.q.a+"</b>")}`; rev.appendChild(d); });
+  if(seen.size) rev.insertAdjacentHTML("afterbegin","<div style='opacity:.8'>Remember these:</div>");
+  document.getElementById("endScreen").classList.remove("hidden");
+  try{ if(parent!==window) parent.postMessage({type:"museumMaze",score,total,lives,missed:[...seen]},"*"); }catch(e){}
+}
+
+// ---------- Movement ----------
+function bfsStep(sx,sy,gx,gy){
+  const key=(x,y)=>y*COLS+x, prev=new Map([[key(sx,sy),null]]), qq=[[sx,sy]];
+  while(qq.length){ const [x,y]=qq.shift(); if(x===gx&&y===gy)break;
+    for(const d of Object.values(DIRS)){ const n=step(x,y,d), nx=n.x, ny=n.y, k=key(nx,ny);
+      if(!prev.has(k) && enemyOK(nx,ny)){ prev.set(k,[x,y]); qq.push([nx,ny]); } } }
+  let cur=[gx,gy]; if(!prev.has(key(gx,gy))) return null;
+  while(true){ const p=prev.get(key(cur[0],cur[1])); if(!p) return null; if(p[0]===sx&&p[1]===sy) return cur; cur=p; }
+}
+function nearestEnemyTile(x,y){ // player target tile for enemies (player may be on a frame tile)
+  if(enemyOK(x,y)) return [x,y];
+  for(const d of Object.values(DIRS)) if(enemyOK(x+d.dx,y+d.dy)) return [x+d.dx,y+d.dy];
+  return [START.x,START.y];
+}
+function stepEntity(e,dt,choose){
+  e.prog += e.speed*dt;
+  while(e.prog>=1){
+    e.tx=e.nx; e.ty=e.ny; e.portal=false;
+    const arrivedHook = choose(e);
+    if(arrivedHook==="stop"){ e.prog=1; return; }
+    if(e.nx===e.tx && e.ny===e.ty){ e.prog=1; return; }
+    e.prog-=1;
+  }
+}
+function choosePlayer(e){
+  const c=cell(e.tx,e.ty);
+  if(ZONES.includes(c) && state==="play"){ answer(c); return "stop"; }
+  const can=dn=>{ const n=step(e.tx,e.ty,DIRS[dn]); return playerOK(n.x,n.y); };
+  if(e.want && can(e.want)) e.dir=e.want;
+  if(e.dir && can(e.dir)){ setMove(e,DIRS[e.dir]); return; }
+  e.nx=e.tx; e.ny=e.ty;
+}
+function chooseEnemy(e){
+  const opts=Object.entries(DIRS).filter(([n,d])=>{ const s=step(e.tx,e.ty,d); return enemyOK(s.x,s.y); });
+  const back = e.dir ? {up:"down",down:"up",left:"right",right:"left"}[e.dir] : null;
+  let pick=null;
+  if(Math.random()<0.72){
+    const [gx,gy]=nearestEnemyTile(player.tx,player.ty);
+    const s=bfsStep(e.tx,e.ty,gx,gy);
+    if(s) pick=opts.find(([n,d])=>{ const t=step(e.tx,e.ty,d); return t.x===s[0]&&t.y===s[1]; });
+  }
+  if(!pick){ const fwd=opts.filter(([n])=>n!==back); const pool=fwd.length?fwd:opts; pick=pool[Math.floor(Math.random()*pool.length)]; }
+  if(pick){ e.dir=pick[0]; setMove(e,pick[1]); } else { e.nx=e.tx; e.ny=e.ty; }
+}
+const pos = e => { const p=Math.min(e.prog,1);
+  if(e.portal) return p<0.5 ? {x:e.tx+e.mdx*p, y:e.ty} : {x:e.nx-e.mdx*(1-p), y:e.ny}; // slide out, then slide in
+  return {x:e.tx+(e.nx-e.tx)*p, y:e.ty+(e.ny-e.ty)*p}; };
+
+// ---------- Input ----------
+function setWant(d){ if(!player)return; player.want=d; if(!player.dir || player.prog>=1){ player.dir=d; } }
+addEventListener("keydown",ev=>{
+  const m={ArrowUp:"up",ArrowDown:"down",ArrowLeft:"left",ArrowRight:"right",w:"up",s:"down",a:"left",d:"right",W:"up",S:"down",A:"left",D:"right"}[ev.key];
+  if(m){ ev.preventDefault(); setWant(m); }
+  if(ev.key==="Enter" && state==="start") startGame();
+});
+document.querySelectorAll("#pad button").forEach(b=>b.addEventListener("pointerdown",ev=>{ev.preventDefault(); setWant(b.dataset.d);}));
+let sw=null;
+cv.addEventListener("pointerdown",ev=>{sw={x:ev.clientX,y:ev.clientY};});
+cv.addEventListener("pointerup",ev=>{ if(!sw)return; const dx=ev.clientX-sw.x, dy=ev.clientY-sw.y; sw=null;
+  if(Math.max(Math.abs(dx),Math.abs(dy))<20) return;
+  setWant(Math.abs(dx)>Math.abs(dy) ? (dx>0?"right":"left") : (dy>0?"down":"up")); });
+
+// ---------- Audio ----------
+let voice=null;
+function pickVoice(){
+  const vs=speechSynthesis.getVoices().filter(v=>/^en/i.test(v.lang));
+  const pref=[/natural/i,/neural/i,/google us english/i,/samantha/i,/aria/i,/jenny/i,/google uk english female/i];
+  for(const p of pref){ const v=vs.find(v=>p.test(v.name)); if(v) return v; }
+  return vs[0]||null;
+}
+try{ speechSynthesis.onvoiceschanged=()=>{voice=pickVoice();}; voice=pickVoice(); }catch(e){}
+function speak(){
+  try{
+    const q=order[qi]; if(!q) return;
+    speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(q.t.replace("___","blank")); u.rate=0.9; u.lang="en-US"; if(voice) u.voice=voice;
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+document.getElementById("speak").onclick=speak;
+let actx=null;
+function sfx(good){
+  try{
+    actx=actx||new (window.AudioContext||window.webkitAudioContext)();
+    const notes=good?[523,659,784]:[300,220];
+    notes.forEach((f,i)=>{ const o=actx.createOscillator(), g=actx.createGain();
+      o.type=good?"triangle":"sawtooth"; o.frequency.value=f; o.connect(g); g.connect(actx.destination);
+      const t=actx.currentTime+i*0.1; g.gain.setValueAtTime(0.15,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.2);
+      o.start(t); o.stop(t+0.22); });
+  }catch(e){}
+}
+
+// ---------- Drawing ----------
+function drawMap(){
+  // floor: marble tiles
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    ctx.fillStyle=(x+y)%2?"#e9e2d4":"#ddd4c3"; ctx.fillRect(x*T,y*T,T,T);
+  }
+  // walls
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){ if(cell(x,y)!=="#")continue;
+    ctx.fillStyle="#4a3a52"; ctx.fillRect(x*T,y*T,T,T);
+    ctx.fillStyle="#5d4a67"; ctx.fillRect(x*T+3,y*T+3,T-6,T-10);
+  }
+  // tunnel openings
+  ctx.font="700 26px Fredoka, sans-serif"; ctx.textAlign="center"; ctx.textBaseline="middle";
+  [TUN_A,TUN_B].forEach(t=>{ const x=t.x, left=x===0; const g=ctx.createLinearGradient(x*T,0,(x+1)*T,0);
+    g.addColorStop(left?0:1,"rgba(60,30,70,.9)"); g.addColorStop(left?1:0,"rgba(60,30,70,0)");
+    ctx.fillStyle=g; ctx.fillRect(x*T,t.y*T,T,T);
+    ctx.fillStyle="#e8b84a"; ctx.fillText(left?"◀":"▶",(x+.5)*T,(t.y+.5)*T); });
+  // frames
+  ZONES.forEach(z=>{ const r=zoneRect[z];
+    const x=r.x0*T+4, y=r.y0*T+4, w=(r.x1-r.x0+1)*T-8, h=(r.y1-r.y0+1)*T-8;
+    ctx.fillStyle="#b8862b"; ctx.fillRect(x,y,w,h);
+    ctx.fillStyle="#f2cf6b"; ctx.fillRect(x+5,y+5,w-10,h-10);
+    ctx.fillStyle="#5a1f2b"; ctx.fillRect(x+11,y+11,w-22,h-22);
+    const word=options[z]||"";
+    let fs=34; ctx.font=`700 ${fs}px Fredoka, sans-serif`;
+    while(ctx.measureText(word).width>w-34 && fs>14){ fs--; ctx.font=`700 ${fs}px Fredoka, sans-serif`; }
+    ctx.fillStyle="#fff"; ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.fillText(word,x+w/2,y+h/2+2);
+  });
+}
+function drawEmoji(ch,p,size){
+  ctx.font=`${size}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+  ctx.textAlign="center"; ctx.textBaseline="middle";
+  ctx.fillText(ch,(p.x+.5)*T,(p.y+.5)*T+2);
+}
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height); drawMap();
+  if(!player) return;
+  const pp=pos(player);
+  ctx.fillStyle="rgba(0,0,0,.18)"; ctx.beginPath(); ctx.ellipse((pp.x+.5)*T,(pp.y+.9)*T,16,6,0,0,7); ctx.fill();
+  drawEmoji("🧒",pp,38);
+  enemies.forEach(e=>drawEmoji("🦖",pos(e),40));
+}
+
+// ---------- Loop ----------
+function loop(t){
+  const dt=Math.min((t-lastT)/1000,0.05); lastT=t;
+  if(state==="pause" && t>=pauseUntil && nextAction){ const f=nextAction; nextAction=null; f(); }
+  if(state==="play"){
+    stepEntity(player,dt,choosePlayer);
+    if(state==="play"){
+      enemies.forEach(e=>stepEntity(e,dt,chooseEnemy));
+      const pp=pos(player);
+      if(enemies.some(e=>{const q=pos(e); return Math.hypot(q.x-pp.x,q.y-pp.y)<0.62;})) caught();
+    }
+  }
+  draw(); requestAnimationFrame(loop);
+}
+document.getElementById("startBtn").onclick=startGame;
+document.getElementById("againBtn").onclick=startGame;
+fit(); requestAnimationFrame(t=>{lastT=t;loop(t);});
+</script>
+</body>
+</html>
