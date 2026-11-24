@@ -140,13 +140,12 @@ td,th{padding:8px 10px;border-bottom:1px solid var(--card2);text-align:left}
 <section id="start" class="panel hero">
   <div class="em">🔦🏛️</div>
   <h2>Welcome to the Big Night at the museum!</h2>
-  <p class="hint">Write your name and class, then start the 6 missions.</p>
+  <p class="hint">Write your name and class, then start the 7 missions.</p>
   <div class="form">
     <input type="text" id="sName" placeholder="Your name">
     <input type="text" id="sClass" placeholder="Your class (e.g. 6A)">
     <button class="btn-gold" onclick="begin()">🔦 Start</button>
     <button class="btn-ghost" onclick="openSlides()">📖 Learn the words first (slides)</button>
-    <button class="btn-ghost" onclick="openGame()">🎮 Play the Maze Chase game</button>
     <div id="startMsg" class="bad"></div>
   </div>
 </section>
@@ -235,16 +234,12 @@ td,th{padding:8px 10px;border-bottom:1px solid var(--card2);text-align:left}
   <div class="feedback" id="fb6"></div>
 </section>
 
-<!-- BONUS GAME -->
-<section class="panel hide" id="game">
-  <div class="slideBar">
-    <h2>🎮 Bonus game · Museum Maze Chase</h2>
-    <a href="museum-maze.html" target="_blank" rel="noopener"><button class="btn-ghost">⛶ Open in a new tab</button></a>
-  </div>
-  <p class="hint">Read the sentence and run into the golden frame with the missing word. Don't let the dinosaurs catch you! Use the arrow keys, swipe, or the ◀ ▲ ▼ ▶ buttons.</p>
+<!-- EX7 -->
+<section class="panel ex hide" id="ex7">
+  <h2>Mission 7 · Maze Chase game</h2>
+  <p class="hint">Read the sentence and run into the golden frame with the missing word. Don't let the dinosaurs catch you! Use the arrow keys, swipe, or the ◀ ▲ ▼ ▶ buttons. You can play again: your best score counts.</p>
   <iframe id="gameFrame" title="Museum Maze Chase" style="width:100%;aspect-ratio:21/16;border:0;border-radius:16px;background:#1d1420;display:block"></iframe>
-  <div class="feedback" id="fbG"></div>
-  <div class="row" style="justify-content:center;margin-top:14px"><button class="btn-gold" onclick="closeGame()">🔦 Back to the missions</button></div>
+  <div class="feedback" id="fb7"></div>
 </section>
 
 <!-- RESULT -->
@@ -303,8 +298,9 @@ const SLIDES={
 };
 
 /* ---------- STATE / NAV ---------- */
-const S={name:"",cls:"",scores:{},max:{1:6,2:6,3:6,4:6,5:5,6:8}};
-const NAMES={1:"Word & meaning",2:"Sentences",3:"Listen & write",4:"Listen & choose",5:"Reading",6:"Speaking"};
+const MS=[1,2,3,4,5,6,7],RPT=8; // missions, report page
+const S={name:"",cls:"",scores:{},max:{1:6,2:6,3:6,4:6,5:5,6:8,7:12}};
+const NAMES={1:"Word & meaning",2:"Sentences",3:"Listen & write",4:"Listen & choose",5:"Reading",6:"Speaking",7:"Maze game"};
 let cur=0;
 function begin(){
   S.name=$("sName").value.trim();S.cls=$("sClass").value.trim();
@@ -315,18 +311,18 @@ function begin(){
   go(1);
 }
 function renderTabs(){
-  $("tabs").innerHTML=`<button class="tab" onclick="openSlides()">📖 Slides</button>`+[1,2,3,4,5,6].map(i=>`<button class="tab ${cur===i?"on":""}" onclick="go(${i})">${i}. ${NAMES[i]}${S.scores[i]!=null?`<span class="sc">${S.scores[i]}/${S.max[i]}</span>`:""}</button>`).join("")
-   +`<button class="tab ${cur===8?"on":""}" onclick="openGame()">🎮 Maze game${GAME.best!=null?`<span class="sc">${GAME.best}/${GAME.total}</span>`:""}</button>`
-   +`<button class="tab ${cur===7?"on":""}" onclick="go(7)">🏆 Report</button>`;
+  $("tabs").innerHTML=`<button class="tab" onclick="openSlides()">📖 Slides</button>`+MS.map(i=>`<button class="tab ${cur===i?"on":""}" onclick="go(${i})">${i}. ${NAMES[i]}${S.scores[i]!=null?`<span class="sc">${S.scores[i]}/${S.max[i]}</span>`:""}</button>`).join("")
+   +`<button class="tab ${cur===RPT?"on":""}" onclick="go(RPT)">🏆 Report</button>`;
 }
 function go(i){
-  if(i<1||i>7) return;
-  stopAudio();logFlush();cur=i;if(i<=6&&!LOG.t0[i])LOG.t0[i]=Date.now();
-  document.querySelectorAll(".ex").forEach(e=>e.classList.add("hide"));$("slides").classList.add("hide");$("game").classList.add("hide");$("navbar").classList.remove("hide");
-  $(i===7?"result":"ex"+i).classList.remove("hide");
-  if(i===7) showResult();
+  if(i<1||i>RPT) return;
+  stopAudio();logFlush();cur=i;if(i<=7&&!LOG.t0[i])LOG.t0[i]=Date.now();
+  document.querySelectorAll(".ex").forEach(e=>e.classList.add("hide"));$("slides").classList.add("hide");$("navbar").classList.remove("hide");
+  $(i===RPT?"result":"ex"+i).classList.remove("hide");
+  if(i===RPT) showResult();
+  if(i===7) loadGame();
   $("prevB").style.visibility=i===1?"hidden":"visible";
-  $("nextB").textContent=i===6?"See my report ›":"Next ›";$("nextB").style.visibility=i===7?"hidden":"visible";
+  $("nextB").textContent=i===7?"See my report ›":"Next ›";$("nextB").style.visibility=i===RPT?"hidden":"visible";
   renderTabs();window.scrollTo({top:0,behavior:"smooth"});
 }
 function setScore(n,s){S.scores[n]=s;LOG.dirty[n]=1;LOG.checks[n]=(LOG.checks[n]||0)+1;renderTabs();const fb=$("fb"+n),m=S.max[n];
@@ -535,36 +531,37 @@ function playMe(i){if(clips[i]){stopAudio();new Audio(clips[i]).play()}}
 
 /* ---------- RESULT ---------- */
 function resultData(){
-  const s=i=>S.scores[i]??0;const total=[1,2,3,4,5,6].reduce((a,i)=>a+s(i),0);const max=Object.values(S.max).reduce((a,b)=>a+b,0);
+  const s=i=>S.scores[i]??0;const total=MS.reduce((a,i)=>a+s(i),0);const max=Object.values(S.max).reduce((a,b)=>a+b,0);
   return {time:new Date().toLocaleString(),name:S.name,cls:S.cls,total,max,percent:Math.round(total*100/max)+"%"};
 }
 function showResult(){
-  const d=resultData(),missing=[1,2,3,4,5,6].filter(i=>S.scores[i]==null);
+  const d=resultData(),missing=MS.filter(i=>S.scores[i]==null);
   $("resBody").innerHTML=`<p><b>${S.name}</b> · ${S.cls}</p><div class="big">${d.total}/${d.max} · ${d.percent}</div>
-   <table><tr><th>Mission</th><th>Score</th></tr>${[1,2,3,4,5,6].map(i=>`<tr><td>${i}. ${NAMES[i]}</td><td>${S.scores[i]!=null?S.scores[i]+"/"+S.max[i]:"<span class='bad'>not checked</span>"}</td></tr>`).join("")}</table>
-   ${missing.length?`<p class="bad">Tip: go back and press "Check" in mission ${missing.join(", ")}.</p>`:""}`;
+   <table><tr><th>Mission</th><th>Score</th></tr>${MS.map(i=>`<tr><td>${i}. ${NAMES[i]}</td><td>${S.scores[i]!=null?S.scores[i]+"/"+S.max[i]:"<span class='bad'>not checked</span>"}</td></tr>`).join("")}</table>
+   ${missing.length?`<p class="bad">Tip: go back and finish mission ${missing.join(", ")} (press “Check”, or play the game in mission 7).</p>`:""}`;
 }
 function sendResult(){
   const fb=$("fbR");
   if(!LOG_URL){fb.className="feedback bad";fb.textContent="Your teacher has not set up sending yet. Please press “Save my result”.";return}
   logFlush();const d=resultData();
   logPost({lesson:"Museum",name:S.name,cls:S.cls,activity:"★ Report (all missions)",score:d.total,total:d.max,status:d.percent,secs:Math.round((Date.now()-LOG.start)/1000),
-    labels:[1,2,3,4,5,6].map(i=>NAMES[i]),words:[1,2,3,4,5,6].map(i=>S.scores[i]!=null?S.scores[i]+"/"+S.max[i]:"not checked"),writing:""});
+    labels:MS.map(i=>NAMES[i]),words:MS.map(i=>S.scores[i]!=null?S.scores[i]+"/"+S.max[i]:"not checked"),writing:""});
   fb.className="feedback ok";fb.textContent="✅ Sent! Well done, museum explorer!";
 }
 function downloadResult(){
-  const d=resultData();const txt=`AT THE MUSEUM – RESULT\nName: ${d.name}\nClass: ${d.cls}\nTime: ${d.time}\n\n`+[1,2,3,4,5,6].map(i=>`${NAMES[i]}: ${S.scores[i]??0}/${S.max[i]}`).join("\n")+`\nTOTAL: ${d.total}/${d.max} (${d.percent})`;
+  const d=resultData();const txt=`AT THE MUSEUM – RESULT\nName: ${d.name}\nClass: ${d.cls}\nTime: ${d.time}\n\n`+MS.map(i=>`${NAMES[i]}: ${S.scores[i]??0}/${S.max[i]}`).join("\n")+`\nTOTAL: ${d.total}/${d.max} (${d.percent})`;
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([txt],{type:"text/plain"}));a.download=`museum_result_${d.name.replace(/\s+/g,"_")}.txt`;a.click();
 }
 
 /* ---------- SEND ANSWERS TO THE TEACHER'S GOOGLE SHEET (same format as Jungle and Space) ---------- */
 const LOG={dirty:{},checks:{},t0:{},start:Date.now()};
-const ACTN={1:"1 Word & meaning (drag & drop)",2:"2 Sentences (drag & drop)",3:"3 Listen & write",4:"4 Listen & choose",5:"5 Reading",6:"6 Speaking"};
+const ACTN={1:"1 Word & meaning (drag & drop)",2:"2 Sentences (drag & drop)",3:"3 Listen & write",4:"4 Listen & choose",5:"5 Reading",6:"6 Speaking",7:"7 Maze chase game"};
 const getQ=()=>{try{return JSON.parse(localStorage.getItem("museumQ")||"[]")}catch(e){return[]}},setQ=a=>{try{localStorage.setItem("museumQ",JSON.stringify(a))}catch(e){}};
 const tx=p=>fetch(LOG_URL,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(p),keepalive:true}).catch(()=>setQ([...getQ(),p]));
 function logPost(p){if(!LOG_URL)return;tx(p);const q=getQ();if(q.length){setQ([]);q.forEach(tx)}}
 const mark=(ok,ans)=>ok?"✔":"✘ "+ans;
 function items(n){
+  if(n===7) return [GAME.missed.length?GAME.missed:["(no mistakes)"],GAME.missed.length?GAME.missed.map(()=>"✘"):["✔"]];
   if(n===1) return [WORDS,WORDS.map(w=>{const c=document.querySelector(`#list1 .drop[data-w="${w}"] .chip`);return c?mark(c.dataset.w===w,c.dataset.w):""})];
   if(n===2) return [DD.map(d=>d[1]),DD.map((d,i)=>{const c=document.querySelector(`#list2 .drop[data-i="${i}"] .chip`);return c?mark(c.dataset.w===d[1],c.dataset.w):""})];
   if(n===3) return [LW,[...document.querySelectorAll("#list3 input")].map(i=>i.value.trim()?mark(norm(i.value)===i.dataset.a,i.value.trim()):"")];
@@ -620,32 +617,22 @@ function slideShowAll(){if(sIdx>0){sStep=STEPS;renderSlide()}}
 function slideFull(){const st=$("stage");document.fullscreenElement?document.exitFullscreen():(st.requestFullscreen&&st.requestFullscreen())}
 function openSlides(){
   stopAudio();
-  document.querySelectorAll(".ex,#start,#game").forEach(e=>e.classList.add("hide"));$("navbar").classList.add("hide");
+  document.querySelectorAll(".ex,#start").forEach(e=>e.classList.add("hide"));$("navbar").classList.add("hide");
   $("slides").classList.remove("hide");$("slidesDone").textContent=S.name?"🔦 Back to the missions":"🔦 Start the missions";
   if(S.name){cur=0;renderTabs()}renderSlide();window.scrollTo({top:0,behavior:"smooth"});
 }
-/* ---------- BONUS GAME (Maze Chase) ---------- */
-const GAME={best:null,total:12,t0:0};
-function openGame(){
-  stopAudio();
-  document.querySelectorAll(".ex,#start,#slides").forEach(e=>e.classList.add("hide"));$("navbar").classList.add("hide");
-  $("game").classList.remove("hide");
-  const f=$("gameFrame");if(!f.src)f.src="museum-maze.html";GAME.t0=GAME.t0||Date.now();
-  if(S.name){cur=8;renderTabs()}
-  window.scrollTo({top:0,behavior:"smooth"});setTimeout(()=>{try{f.focus()}catch(e){}},300);
-}
-function closeGame(){
-  $("game").classList.add("hide");
-  if(S.name){$("navbar").classList.remove("hide");go(1)}else $("start").classList.remove("hide");
+/* ---------- MISSION 7: MAZE CHASE GAME (museum-maze.html) ---------- */
+const GAME={best:null,missed:[],plays:0};
+function loadGame(){
+  const f=$("gameFrame");if(!f.src)f.src="museum-maze.html";
+  setTimeout(()=>{try{f.focus();f.contentWindow.focus()}catch(e){}},300);
 }
 addEventListener("message",e=>{
   const d=e.data;if(!d||d.type!=="museumMaze")return;
-  GAME.total=d.total;if(GAME.best==null||d.score>GAME.best)GAME.best=d.score;
-  const fb=$("fbG");fb.className="feedback "+(d.score===d.total?"ok":"bad");
-  GAME.t0=Date.now();
-  fb.textContent=`🎮 Game score: ${d.score}/${d.total}`+(GAME.best>d.score?` · Your best: ${GAME.best}/${d.total}`:"");
-  if(S.name){renderTabs();logPost({lesson:"Museum",name:S.name,cls:S.cls,activity:"🎮 Bonus: Maze chase game",score:d.score,total:d.total,
-    status:d.lives>0?"finished":"game over",secs:Math.round((Date.now()-GAME.t0)/1000),labels:d.missed,words:d.missed.map(()=>"✘"),writing:""})}
+  GAME.plays++;
+  if(GAME.best==null||d.score>=GAME.best){GAME.best=d.score;GAME.missed=d.missed||[]}
+  setScore(7,GAME.best);
+  $("fb7").textContent+=` · This game: ${d.score}/${d.total}`+(GAME.plays>1?` · Games played: ${GAME.plays}`:"");
 });
 function closeSlides(){
   $("slides").classList.add("hide");stopAudio();
